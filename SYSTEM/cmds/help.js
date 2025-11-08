@@ -1,22 +1,19 @@
-const fs = require("fs-extra");
-const axios = require("axios");
-const path = require("path");
 const { getPrefix } = global.utils;
-const { commands, aliases } = global.NeroBot; // لا تغيّر الاسم لو يعتمد عليه النظام
+const { commands, aliases } = global.NeroBot;
 const doNotDelete = "[ 🩷 | Bachi ]";
 
 module.exports = {
   config: {
     name: "اوامر",
-    version: "1.18",
+    version: "1.20",
     author: "باتشيرا الانا 🎀",
     countDown: 5,
     role: 0,
     shortDescription: {
-      ar: "قائمة الأوامر الكيوت 💖",
+      ar: "قائمة أوامر أنيقة ومبسطة 🎀",
     },
     longDescription: {
-      ar: "يعرض كل أوامر البوت بتنسيق أنيق وكيوت 🎀",
+      ar: "تعرض كل أوامر البوت بتصميم مريح وكيوت 💫",
     },
     category: "النظام",
     guide: {
@@ -30,67 +27,63 @@ module.exports = {
     const threadData = await threadsData.get(threadID);
     const prefix = getPrefix(threadID);
 
+    // عرض كل الأوامر بدون تفاصيل
     if (args.length === 0) {
       const categories = {};
-      let msg = "";
-      msg += `🌸✨ 〘 قائمة أوامر Bachi 💖 〙 ✨🌸\n\n`;
+      let msg = `🎀✨ قائمة أوامر باتشي 💞\n━━━━━━━━━━━━━━━\n\n`;
 
       for (const [name, value] of commands) {
         if (value.config.role > 1 && role < value.config.role) continue;
         const category = value.config.category || "غير مصنف";
-        categories[category] = categories[category] || { commands: [] };
-        categories[category].commands.push(name);
+        categories[category] = categories[category] || [];
+        categories[category].push(name);
       }
 
-      for (const [category, data] of Object.entries(categories)) {
-        msg += `🍓 ⊹･ﾟ﹕${category.toUpperCase()}﹕･ﾟ⊹ 🍓\n`;
-        const sorted = data.commands.sort();
-        for (const cmd of sorted) {
-          msg += `  💫 • ${cmd}\n`;
-        }
-        msg += "\n";
+      for (const [category, cmds] of Object.entries(categories)) {
+        msg += `🍓 ${category}\n`;
+        msg += cmds.map(cmd => `© ${cmd}`).join("  ");
+        msg += "\n\n";
       }
 
-      const total = commands.size;
-      msg += `━━━━━━━━━━━━━━━━━━━\n`;
-      msg += `✨ عدد الأوامر الكلي: ${total}\n`;
-      msg += `💬 اكتب: ${prefix} اوامر [اسم_الأمر] لمعرفة التفاصيل.\n`;
-      msg += `🌷 صُنع بحب من باتشيرا الانا 🩷`;
+      msg += `━━━━━━━━━━━━━━━\n`;
+      msg += `✨ المجموع: ${commands.size} أمر 💖\n`;
+      msg += `🩵 استخدم: ${prefix} اوامر [اسم_الأمر] لعرض التفاصيل.\n`;
+      msg += `━━━━━━━━━━━━━━━\n`;
+      msg += `🌷 بتوقيع: باتشيرا الانا 🎀`;
 
       return message.reply(msg);
-    } else {
+    } 
+
+    // عرض تفاصيل أمر واحد
+    else {
       const commandName = args[0].toLowerCase();
       const command = commands.get(commandName) || commands.get(aliases.get(commandName));
 
-      if (!command) {
-        return message.reply(`❓ يا قلبي ما لقيت أمر بهذا الاسم "${commandName}" 😢`);
-      }
+      if (!command)
+        return message.reply(`❓ ما في أمر اسمه "${commandName}" يا لطيف 😭`);
 
       const c = command.config;
       const roleText = roleToText(c.role);
       const author = c.author || "غير معروف";
-      const desc = c.longDescription?.ar || "مافي وصف متاح 😭";
-      const guide = c.guide?.ar || "مافي شرح 😿";
+      const desc = c.longDescription?.ar || "مافي وصف 😿";
+      const guide = c.guide?.ar || "مافي شرح 😅";
       const usage = guide.replace(/{p}/g, prefix).replace(/{n}/g, c.name);
 
       const response = `
 🌸✨〘 معلومات الأمر 〙✨🌸
-━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 💖 الاسم: ${c.name}
 🌼 الوصف: ${desc}
 💫 أسماء أخرى: ${c.aliases?.join(", ") || "مافي"}
 🧠 الإصدار: ${c.version || "1.0"}
 🔒 الصلاحية: ${roleText}
-⏰ وقت الانتظار: ${c.countDown || 1} ثانية
+⏰ الانتظار: ${c.countDown || 1} ث
 👑 المؤلف: ${author}
-━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━
 📘 الاستخدام:
 ${usage}
-━━━━━━━━━━━━━━━━━━━
-🎀 ملاحظة:
-الكلام داخل < > تقدر تغيّره، وداخل [a|b] تختار واحد منهم 💡
-━━━━━━━━━━━━━━━━━━━
-✨ من قلب باتشي 💞
+━━━━━━━━━━━━━━━
+🎀 من باتشي بالحب 💞
 `;
 
       return message.reply(response);
@@ -103,9 +96,9 @@ function roleToText(role) {
     case 0:
       return "👤 الكل";
     case 1:
-      return "🛠️ المشرفين فقط";
+      return "🛠️ المشرفين";
     case 2:
-      return "👑 المطور فقط";
+      return "👑 المطور";
     default:
       return "مجهول 😿";
   }
