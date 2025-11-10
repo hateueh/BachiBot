@@ -41,7 +41,7 @@ module.exports = {
 		try {
 			const prompt = `أجب بجديّة ومنطقية وعلمية عن السؤال التالي بالعربية:\n${question}`;
 			const response = await axios.post(
-				"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=YOUR_API_KEY_HERE",
+				"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II",
 				{
 					contents: [{ parts: [{ text: prompt }] }]
 				}
