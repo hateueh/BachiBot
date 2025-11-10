@@ -1,9 +1,4 @@
 const axios = require("axios");
-const { getPrefix } = global.utils;
-
-const API_KEY = "AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II";
-const BOT_NAME = "سينكو";
-const aliases = ["senku", "سينكو", "سينكووو", "سِنكو", "سينك"];
 
 module.exports = {
   config: {
@@ -12,6 +7,7 @@ module.exports = {
     author: "باتشيرا الانا 🎀",
     countDown: 5,
     role: 0,
+    aliases: ["senku", "سينكو", "سينكووو", "سِنكو", "سينك"], // ⬅️ ضعها هنا
     shortDescription: {
       ar: "العالم سينكو يجيب بعقل علمي 🧠⚗️",
     },
@@ -24,17 +20,24 @@ module.exports = {
     },
   },
 
-  onStart: function ({ message, event }) {
+  // ⬇️ أضف onStart لعرض الرسالة الأساسية
+  onStart: async function ({ message }) {
+    message.reply("🧠│أنا سينكو، العالم العبقري! نادني باسمي ثم اسأل سؤالك العلمي ⚗️");
+  },
+
+  // ⬇️ غير onStart الحالية إلى onChat
+  onChat: async function({ message, event }) {
     const { body } = event;
     const lowerBody = body?.toLowerCase() || "";
+    const aliases = ["senku", "سينكو", "سينكووو", "سِنكو", "سينك"];
 
-    // تحقق إذا تم مناداته بالاسم أو alias
     if (!aliases.some(alias => lowerBody.startsWith(alias.toLowerCase()))) return;
 
     const userMsg = body.replace(new RegExp(`^(${aliases.join("|")})`, "i"), "").trim();
     if (!userMsg) return message.reply("🧠│تفضل، ما هو سؤالك العلمي؟");
 
-    // برومبت سينكو
+    // ... باقي الكود
+    const API_KEY = "AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II";
     const prompt = `
 أنت الآن في وضع الشخصية: "سينكو" من أنمي Dr. Stone.
 تتحدث بذكاء وهدوء، وتحب التحليل العلمي الدقيق.
@@ -49,27 +52,17 @@ module.exports = {
 "${userMsg}"
 `;
 
-    // إعداد الطلب إلى Gemini API
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
     const payload = {
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }],
-        },
-      ],
+      contents: [{ parts: [{ text: prompt }] }],
     };
 
-    axios
-      .post(url, payload)
-      .then(res => {
-        const response =
-          res.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-          "❌│لم أستطع الوصول لإجابة دقيقة حالياً، أعد صياغة سؤالك من فضلك.";
-        message.reply(`🔬│${response}`);
-      })
-      .catch(() => {
-        message.reply("⚠️│حدث خطأ أثناء الاتصال بـ API يا عبقري.");
-      });
+    try {
+      const res = await axios.post(url, payload);
+      const response = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || "❌│لم أستطع الوصول لإجابة دقيقة.";
+      message.reply(`🔬│${response}`);
+    } catch (error) {
+      message.reply("⚠️│حدث خطأ أثناء الاتصال بـ API يا عبقري.");
+    }
   },
 };
