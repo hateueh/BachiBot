@@ -71,7 +71,7 @@ ${previousMsgs || "مافي شي قبله، أول مرة تتكلمون 🎀"}
 رد عليه باللهجة الخليجية، بأسلوب لطيف، كأنك ولد كيوت شوي خجول 🥺💞
 `;
 
-      const API_KEY = "YOUR_GEMINI_API_KEY";
+      const API_KEY = "AIzaSyATfH9vfF52bicmJups3sBKKLvQ4CMYX_s";
 
       const response = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
