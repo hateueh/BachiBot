@@ -1,62 +1,75 @@
 const axios = require("axios");
+const { getPrefix } = global.utils;
+
+const API_KEY = "AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II";
+const BOT_NAME = "سينكو";
+const aliases = ["senku", "سينكو", "سينكووو", "سِنكو", "سينك"];
 
 module.exports = {
-	config: {
-		name: "سينكو",
-		aliases: ["senku", "سينكوو", "sinku", "senco", "senk"],
-		version: "1.0",
-		author: "باتشيرا الانا",
-		countDown: 5,
-		role: 0,
-		description: {
-			ar: "ذكاء اصطناعي متطور يجيب عن الأسئلة بجديّة ومنطقية"
-		},
-		category: "ذكاء_اصطناعي",
-		guide: {
-			ar: "{pn} <سؤالك> — لطرح سؤال على سينكو العبقري 🔬"
-		}
-	},
+  config: {
+    name: "سينكو",
+    version: "1.5",
+    author: "باتشيرا الانا 🎀",
+    countDown: 5,
+    role: 0,
+    shortDescription: {
+      ar: "العالم سينكو يجيب بعقل علمي 🧠⚗️",
+    },
+    longDescription: {
+      ar: "بوت ذكي يتفاعل علميًا فقط عند مناداته باسمه أو ألقابه 😌",
+    },
+    category: "ذكاء اصطناعي",
+    guide: {
+      ar: "{pn} [سؤال] بعد مناداة سينكو ⚗️",
+    },
+  },
 
-	langs: {
-		ar: {
-			missingQuestion: "🧠│من فضلك، اطرح سؤالك بعد الأمر، مثال:\nسينكو ما هي الطاقة النووية؟",
-			thinking: "🔬│يفكر سينكو في إجابة علمية دقيقة...",
-			noAnswer: "❌│لم أستطع الوصول لإجابة دقيقة حالياً، أعد صياغة سؤالك من فضلك.",
-			devInfo: "⚙️│المطور: باتشيرا الانا\n🔗 الحساب: https://www.facebook.com/batshyra.alana"
-		}
-	},
+  onStart: function ({ message, event }) {
+    const { body } = event;
+    const lowerBody = body?.toLowerCase() || "";
 
-	// 💬 onStart عشان يظهر في قائمة الأوامر
-	onStart: async function ({ message }) {
-		message.reply("🔬 سينكو العبقري هنا! اكتب: سينكو + سؤالك 🧠✨");
-	},
+    // تحقق إذا تم مناداته بالاسم أو alias
+    if (!aliases.some(alias => lowerBody.startsWith(alias.toLowerCase()))) return;
 
-	onChat: async function ({ message, args, getLang }) {
-		const question = args.join(" ");
-		if (!question)
-			return message.reply(getLang("missingQuestion"));
+    const userMsg = body.replace(new RegExp(`^(${aliases.join("|")})`, "i"), "").trim();
+    if (!userMsg) return message.reply("🧠│تفضل، ما هو سؤالك العلمي؟");
 
-		const devKeywords = ["من طورك", "مين صنعك", "من صانعك", "المطور", "developer", "creator", "who made you"];
-		if (devKeywords.some(k => question.toLowerCase().includes(k)))
-			return message.reply(getLang("devInfo"));
+    // برومبت سينكو
+    const prompt = `
+أنت الآن في وضع الشخصية: "سينكو" من أنمي Dr. Stone.
+تتحدث بذكاء وهدوء، وتحب التحليل العلمي الدقيق.
+تتحدث أحيانًا بأسلوب عبقري ساخر، لكن تظل محترمًا.
+أجب على السؤال أدناه بلغة عربية واضحة وذكية، مع لمسة خفيفة من طريقتك العبقرية.
 
-		message.reply(getLang("thinking"));
+المطور الخاص بك: باتشيرا الانا 🎀  
+عبقري صغير ومبتكر في البرمجة 💻  
+رابطه في الفيسبوك: https://www.facebook.com/batshyra.alana  
 
-		try {
-			const prompt = `أجب بجديّة ومنطقية وعلمية عن السؤال التالي بالعربية:\n${question}`;
-			const response = await axios.post(
-				"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II",
-				{ contents: [{ parts: [{ text: prompt }] }] }
-			);
+السؤال من المستخدم:
+"${userMsg}"
+`;
 
-			const answer =
-				response.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-				getLang("noAnswer");
+    // إعداد الطلب إلى Gemini API
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`;
+    const payload = {
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: prompt }],
+        },
+      ],
+    };
 
-			message.reply("🧠│" + answer);
-		} catch (error) {
-			console.error(error);
-			message.reply(getLang("noAnswer"));
-		}
-	}
+    axios
+      .post(url, payload)
+      .then(res => {
+        const response =
+          res.data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+          "❌│لم أستطع الوصول لإجابة دقيقة حالياً، أعد صياغة سؤالك من فضلك.";
+        message.reply(`🔬│${response}`);
+      })
+      .catch(() => {
+        message.reply("⚠️│حدث خطأ أثناء الاتصال بـ API يا عبقري.");
+      });
+  },
 };
