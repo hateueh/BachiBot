@@ -40,8 +40,8 @@ module.exports = {
       }
 
       for (const [category, cmds] of Object.entries(categories)) {
-        msg += `🍓 ${category}\n`;
-        msg += cmds.map(cmd => `© ${cmd}`).join("  ");
+        msg += `∆${category}∆\n`;
+        msg += cmds.map(cmd => `•${cmd}`).join("  ");
         msg += "\n\n";
       }
 
