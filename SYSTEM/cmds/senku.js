@@ -3,7 +3,7 @@ const axios = require("axios");
 module.exports = {
 	config: {
 		name: "سينكو",
-		aliases: ["senku", "سينكوو", "sinku", "sinku", "drstone", "senco", "senk"],
+		aliases: ["senku", "سينكوو", "sinku", "senco", "senk"],
 		version: "1.0",
 		author: "باتشيرا الانا",
 		countDown: 5,
@@ -11,9 +11,9 @@ module.exports = {
 		description: {
 			ar: "ذكاء اصطناعي متطور يجيب عن الأسئلة بجديّة ومنطقية"
 		},
-		category: "ذكاء اصطناعي",
+		category: "ذكاء_اصطناعي",
 		guide: {
-			ar: "{pn} <السؤال> — لطرح سؤال على سينكو العبقري"
+			ar: "{pn} <سؤالك> — لطرح سؤال على سينكو العبقري 🔬"
 		}
 	},
 
@@ -26,12 +26,16 @@ module.exports = {
 		}
 	},
 
-	onStart: async function ({ message, args, getLang }) {
+	// 💬 onStart عشان يظهر في قائمة الأوامر
+	onStart: async function ({ message }) {
+		message.reply("🔬 سينكو العبقري هنا! اكتب: سينكو + سؤالك 🧠✨");
+	},
+
+	onChat: async function ({ message, args, getLang }) {
 		const question = args.join(" ");
 		if (!question)
 			return message.reply(getLang("missingQuestion"));
 
-		// إذا سأل المستخدم عن المطور
 		const devKeywords = ["من طورك", "مين صنعك", "من صانعك", "المطور", "developer", "creator", "who made you"];
 		if (devKeywords.some(k => question.toLowerCase().includes(k)))
 			return message.reply(getLang("devInfo"));
@@ -42,9 +46,7 @@ module.exports = {
 			const prompt = `أجب بجديّة ومنطقية وعلمية عن السؤال التالي بالعربية:\n${question}`;
 			const response = await axios.post(
 				"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II",
-				{
-					contents: [{ parts: [{ text: prompt }] }]
-				}
+				{ contents: [{ parts: [{ text: prompt }] }] }
 			);
 
 			const answer =
