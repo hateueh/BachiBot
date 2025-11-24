@@ -1,6 +1,6 @@
 module.exports = {
     config: {
-        name: "من_انت",
+        name: "المالك",
         aliases: ["معلومات عنك" ],
         version: "1.1", 
         author: "باتشيرا الانا",
