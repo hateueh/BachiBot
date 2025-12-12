@@ -9,7 +9,7 @@ module.exports = {
 			
 			ar: "قم بالتطلع على ايدي المجموعة"
 		},
-		category: "معلومات",
+		category: "ادوات",
 		guide: {
 			en: "{pn}"
 		}
