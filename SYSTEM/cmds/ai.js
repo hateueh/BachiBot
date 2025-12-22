@@ -65,7 +65,7 @@ ${previousMsgs || "مافي شي قبله 🎀"}
 رد بأسلوب فيمبوي غوث كيوت ومشاغب، شوي حساس، ولهجة خليجية 🖤🎀.
 `;
 
-      const API_KEY = "AIzaSyATfH9vfF52bicmJups3sBKKLvQ4CMYX_s";
+      const API_KEY = "AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II";
 
       const response = await axios.post(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
