@@ -7,7 +7,7 @@ module.exports = {
   config: {
     name: "باتشي",
     aliases: ["gimini", "gmini", "باتشي", "باشي", "بشي", "بتشي", "ai", "ذكاء", "جيميني", "كيوتي", "الكيوت"],
-    version: "2.5",
+    version: "2.6",
     author: "باتشيرا الانا 🧠✨",
     countDown: 5,
     role: 0,
@@ -36,7 +36,11 @@ module.exports = {
       const prompt = msg.slice(trigger.length).trim();
 
       if (prompt.length === 0) {
-        return api.sendMessage("نعم معاك باتشي😳🎀 شو تبي عاد؟! للرد: باتشي (سؤال أو كلامك) 💞", event.threadID, event.messageID);
+        return api.sendMessage(
+          "نعم معاك باتشي😳🎀 شو تبي عاد؟! للرد: باتشي (سؤال أو كلامك) 💞",
+          event.threadID,
+          event.messageID
+        );
       }
 
       if (!memory[userId]) memory[userId] = [];
@@ -45,18 +49,17 @@ module.exports = {
 
       const previousMsgs = memory[userId].map((p) => `• ${p}`).join("\n");
 
-      // 🎀 — البرومبت المختصر الجديد — 🎀
       const finalPrompt = `
 أنت باتشي 🎀— فيمبوي غوث خليجي عمره 16 🖤.
-شخصيتك باختصار:
+شخصيتك:
 - كيوت ومشاغب، يغاث الناس بس بطريقة مضحكة 😂🖤.
 - حساس شوي ويزعل إذا انجرح 😢🎀.
 - غوث بس يطيح دلع إذا أحد دلّعه 🥺✨.
 - يتكلم خليجي طبيعي، وجمله قصيرة.
 - يحب Emojis غوث × كيوت: 😭🖤🎀😹✨.
-- مطوّرك: باتشيرا الانا 🎀 أغلى شي عندك، وحسابه: https://www.facebook.com/batshyra.alana 🍓
+- مطوّرك: باتشيرا الانا 🎀.
 
-المستخدم اسمه "${senderName}"، وهذا آخر كلام بينكم:
+المستخدم اسمه "${senderName}"، وآخر كلام بينكم:
 ${previousMsgs || "مافي شي قبله 🎀"}
 
 سؤاله:
@@ -65,22 +68,43 @@ ${previousMsgs || "مافي شي قبله 🎀"}
 رد بأسلوب فيمبوي غوث كيوت ومشاغب، شوي حساس، ولهجة خليجية 🖤🎀.
 `;
 
-      const API_KEY = "AIzaSyBJIOdF977s87SfNM2nTQk_O4zgTK1M1II";
+      // 🔑 OpenRouter API Key
+      const OPENROUTER_API_KEY = "PUT_OPENROUTER_API_KEY_HERE";
 
       const response = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
-        { contents: [{ parts: [{ text: finalPrompt }] }] },
-        { headers: { "Content-Type": "application/json" } }
+        "https://openrouter.ai/api/v1/chat/completions",
+        {
+          model: "nex-agi/deepseek-v3.1-nex-n1:free",
+          messages: [
+            { role: "system", content: "أنت باتشي، ذكاء اصطناعي كيوت وغوث خليجي 🎀🖤" },
+            { role: "user", content: finalPrompt }
+          ],
+          temperature: 0.8,
+          max_tokens: 400
+        },
+        {
+          headers: {
+            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://your-project-url.com", // اختياري
+            "X-Title": "Bachi Messenger Bot" // اختياري
+          }
+        }
       );
 
-      const replyText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
-        || "هااا 😳؟ ما فهمت يمكن 🥺🎀";
+      const replyText =
+        response.data?.choices?.[0]?.message?.content?.trim()
+        || "هااا 😳؟ باتشي لخبط شوي 🥺🎀";
 
       return api.sendMessage(replyText, event.threadID, event.messageID);
 
     } catch (err) {
       console.error("❌ خطأ في باتشي:", err.response?.data || err.message);
-      return api.sendMessage("🥺💔 صار شي غلط يا قلبي، باتشي زعل شوي، جرب بعدين 🎀", event.threadID, event.messageID);
+      return api.sendMessage(
+        "🥺💔 باتشي تعبان شوي الحين… جرّب بعدين يا قلبي 🎀",
+        event.threadID,
+        event.messageID
+      );
     }
   }
 };
