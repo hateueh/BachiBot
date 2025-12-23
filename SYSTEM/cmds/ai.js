@@ -69,7 +69,7 @@ ${previousMsgs || "مافي شي قبله 🎀"}
 `;
 
       // 🔑 OpenRouter API Key
-      const OPENROUTER_API_KEY = "PUT_OPENROUTER_API_KEY_HERE";
+      const OPENROUTER_API_KEY = "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";
 
       const response = await axios.post(
         "https://openrouter.ai/api/v1/chat/completions",
