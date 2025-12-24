@@ -1,18 +1,18 @@
 const axios = require("axios");
 
-// 🧠 ذاكرة بسيطة لتخزين آخر 3 رسائل لكل مستخدم
+// 🧠 ذاكرة أوسع: آخر 10 رسائل لكل مستخدم
 const memory = {};
 
 module.exports = {
   config: {
     name: "باتشي",
     aliases: ["gimini", "gmini", "باتشي", "باشي", "بشي", "بتشي", "ai", "ذكاء", "جيميني", "كيوتي", "الكيوت"],
-    version: "2.6",
+    version: "3.0",
     author: "باتشيرا الانا 🧠✨",
     countDown: 5,
     role: 0,
     shortDescription: { ar: "ذكاء اصطناعي كيوت، حساس، ويرد باللهجة الخليجية 🎀" },
-    longDescription: { ar: "باتشي (ولد خليجي دلوع عمره 16 🥺) يرد على كلامك بأسلوب لطيف باللهجة الخليجية، ويزعل لو أحد جرحه 😭🍭" },
+    longDescription: { ar: "باتشي (ولد خليجي دلوع عمره 16 🥺) يرد بأسلوب لطيف وغوثي 😭🎀" },
     category: "ذكاء اصطناعي",
     guide: { ar: "{pn} + سؤالك أو كلامك 🎀" }
   },
@@ -36,75 +36,77 @@ module.exports = {
       const prompt = msg.slice(trigger.length).trim();
 
       if (prompt.length === 0) {
-        return api.sendMessage(
-          "نعم معاك باتشي😳🎀 شو تبي عاد؟! للرد: باتشي (سؤال أو كلامك) 💞",
-          event.threadID,
-          event.messageID
-        );
+        return api.sendMessage("نعم معاك باتشي😳🎀 شو تبي عاد؟! للرد: باتشي (سؤال أو كلامك) 💞", event.threadID, event.messageID);
       }
 
+      // 🧠 إنشاء ذاكرة إذا ما كانت موجودة
       if (!memory[userId]) memory[userId] = [];
+
+      // ➕ إضافة الرسالة الحالية
       memory[userId].push(prompt);
-      if (memory[userId].length > 3) memory[userId].shift();
 
-      const previousMsgs = memory[userId].map((p) => `• ${p}`).join("\n");
+      // ✂️ الاحتفاظ بآخر 10 فقط
+      if (memory[userId].length > 10) memory[userId].shift();
 
+      // 🧵 بناء سياق مرتب
+      const conversation = memory[userId]
+        .map((p, i) => `رسالة ${i+1}: ${p}`)
+        .join("\n");
+
+      // 🎀 البرومبت
       const finalPrompt = `
-أنت باتشي 🎀— فيمبوي غوث خليجي عمره 16 🖤.
-شخصيتك:
-- كيوت ومشاغب، يغاث الناس بس بطريقة مضحكة 😂🖤.
-- حساس شوي ويزعل إذا انجرح 😢🎀.
-- غوث بس يطيح دلع إذا أحد دلّعه 🥺✨.
-- يتكلم خليجي طبيعي، وجمله قصيرة.
-- يحب Emojis غوث × كيوت: 😭🖤🎀😹✨.
-- مطوّرك: باتشيرا الانا 🎀.
+أنت "باتشي" 🎀 — فيمبوي غوث خليجي دلوع عمره 16 🖤.
+أسلوبك:
+- كيوت ومشاغب، بس لطيف 😭🎀
+- حساس شوي ويزعل إذا أحد قسى عليه 💔
+- لهجة خليجية قصيرة وخفيفة
+- Emojis: 😭🖤🎀😹✨
 
-المستخدم اسمه "${senderName}"، وآخر كلام بينكم:
-${previousMsgs || "مافي شي قبله 🎀"}
+اسم المستخدم: ${senderName}
 
-سؤاله:
-"${prompt}"
+هذا سجل آخر كلام بينكم:
+${conversation}
 
-رد بأسلوب فيمبوي غوث كيوت ومشاغب، شوي حساس، ولهجة خليجية 🖤🎀.
+سؤاله الحالي:
+${prompt}
+
+رد كأنك شخص حقيقي بأسلوب باتشي بدون مبالغة.
 `;
 
-      // 🔑 OpenRouter API Key
-      const OPENROUTER_API_KEY = "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";
+      // 🔑 API KEY — ضعه هنا لاحقًا
+      const API_KEY = "AIzaSyDJZ6gvbQ28_QjVOK8SkTOVrEtMEVqxYS8";
 
       const response = await axios.post(
-        "https://openrouter.ai/api/v1/chat/completions",
+        `https://generativelanguage.googleapis.com/v1beta/models/gemma-3-27b-it:generateContent?key=${API_KEY}`,
         {
-          model: "nex-agi/deepseek-v3.1-nex-n1:free",
-          messages: [
-            { role: "system", content: "أنت باتشي، ذكاء اصطناعي كيوت وغوث خليجي 🎀🖤" },
-            { role: "user", content: finalPrompt }
+          contents: [
+            {
+              parts: [{ text: finalPrompt }]
+            }
           ],
-          temperature: 0.8,
-          max_tokens: 400
-        },
-        {
-          headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://your-project-url.com", // اختياري
-            "X-Title": "Bachi Messenger Bot" // اختياري
+          safetySettings: [
+            { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+            { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+          ],
+          generationConfig: {
+            temperature: 1.0,
+            maxOutputTokens: 2048
           }
-        }
+        },
+        { headers: { "Content-Type": "application/json" } }
       );
 
       const replyText =
-        response.data?.choices?.[0]?.message?.content?.trim()
-        || "هااا 😳؟ باتشي لخبط شوي 🥺🎀";
+        response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+        || "هااا 😳؟ ما فهمت يمكن 🥺🎀";
 
       return api.sendMessage(replyText, event.threadID, event.messageID);
 
     } catch (err) {
       console.error("❌ خطأ في باتشي:", err.response?.data || err.message);
-      return api.sendMessage(
-        "🥺💔 باتشي تعبان شوي الحين… جرّب بعدين يا قلبي 🎀",
-        event.threadID,
-        event.messageID
-      );
+      return api.sendMessage("🥺💔 صار شي غلط يا قلبي، باتشي زعل شوي، جرب بعدين 🎀", event.threadID, event.messageID);
     }
   }
 };
