@@ -1,24 +1,31 @@
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 // 🧠 ذاكرة أوسع: آخر 10 رسائل لكل مستخدم
 const memory = {};
+
+// 📁 مسار ملف config.json
+const configPath = path.join(__dirname, "..", "config.json");
 
 module.exports = {
   config: {
     name: "باتشي",
     aliases: ["gimini", "gmini", "باتشي", "باشي", "بشي", "بتشي", "ai", "ذكاء", "جيميني", "كيوتي", "الكيوت"],
-    version: "3.0",
+    version: "3.1", // 🔼 رفع الإصدار
     author: "باتشيرا الانا 🧠✨",
     countDown: 5,
     role: 0,
     shortDescription: { ar: "ذكاء اصطناعي كيوت، حساس، ويرد باللهجة الخليجية 🎀" },
     longDescription: { ar: "باتشي (ولد خليجي دلوع عمره 16 🥺) يرد بأسلوب لطيف وغوثي 😭🎀" },
     category: "ذكاء اصطناعي",
-    guide: { ar: "{pn} + سؤالك أو كلامك 🎀" }
+    guide: { 
+      ar: "{pn} + سؤالك\n- {pn} $جديد + سؤالك (لتصفية السياق)\n- {pn} clearContext (للمشرف فقط: لتنظيف جميع السياقات)"
+    }
   },
 
   onStart: async function ({ message }) {
-    message.reply("🎀 باتشي هنا يا قلبي! للرد عليّ، اكتب: باتشي + كلامك 🩷");
+    message.reply(`🎀 باتشي هنا يا قلبي! 🥰\n\n📝 الاستخدام:\n• باتشي + سؤالك\n• باتشي $جديد + سؤالك (لتصفية السياق السابق)\n• باتشي clearContext (للمشرف فقط)`);
   },
 
   onChat: async function({ api, event }) {
@@ -28,53 +35,96 @@ module.exports = {
 
       const triggers = ["باتشي", "باشي", "بشي", "بتشي", "ai", "ذكاء", "جيميني", "كيوتي", "الكيوت"];
       const lower = msg.toLowerCase();
-      const trigger = triggers.find(t => lower.startsWith(t));
+      const trigger = triggers.find(t => lower.startsWith(t.toLowerCase()));
       if (!trigger) return;
 
       const senderName = event.senderName || "يا بعد قلبي";
       const userId = event.senderID;
-      const prompt = msg.slice(trigger.length).trim();
-
+      
+      // استخراج الرسالة بعد اسم البوت
+      const messageAfterTrigger = msg.slice(trigger.length).trim();
+      
+      // 📌 حالة clearContext للمشرف
+      if (messageAfterTrigger.toLowerCase() === "clearcontext") {
+        // قراءة ملف config.json
+        let adminId = null;
+        try {
+          if (fs.existsSync(configPath)) {
+            const configData = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+            adminId = configData.admin || null;
+          }
+        } catch (error) {
+          console.error("❌ خطأ في قراءة config.json:", error);
+        }
+        
+        // التحقق إذا كان المستخدم هو المشرف
+        if (adminId && userId === adminId) {
+          // تنظيف جميع السياقات
+          for (const key in memory) {
+            delete memory[key];
+          }
+          return api.sendMessage("✅ تم تنظيف جميع السياقات للمستخدمين بنجاح! 🧹✨", event.threadID, event.messageID);
+        } else {
+          return api.sendMessage("❌ هذا الأمر متاح فقط للمشرف! 🛡️", event.threadID, event.messageID);
+        }
+      }
+      
+      // 📌 حالة $جديد لتنظيف سياق المستخدم الحالي
+      let cleanContext = false;
+      let prompt = messageAfterTrigger;
+      
+      if (messageAfterTrigger.toLowerCase().startsWith("$جديد")) {
+        cleanContext = true;
+        prompt = messageAfterTrigger.slice(5).trim(); // إزالة "$جديد"
+      }
+      
       if (prompt.length === 0) {
-        return api.sendMessage("نعم معاك باتشي😳🎀 شو تبي عاد؟! للرد: باتشي (سؤال أو كلامك) 💞", event.threadID, event.messageID);
+        return api.sendMessage(
+          `نعم معاك باتشي😳🎀 شو تبي عاد؟!\n\n💡 أمثلة:\n• باتشي كيف حالك؟\n• باتشي $جديد كيف حالك؟ (لتصفية السياق)\n• باتشي clearContext (للمشرف فقط)`,
+          event.threadID, 
+          event.messageID
+        );
       }
 
-      // 🧠 إنشاء ذاكرة إذا ما كانت موجودة
-      if (!memory[userId]) memory[userId] = [];
-
-      // ➕ إضافة الرسالة الحالية
-      memory[userId].push(prompt);
-
-      // ✂️ الاحتفاظ بآخر 10 فقط
-      if (memory[userId].length > 10) memory[userId].shift();
+      // 🧠 إدارة الذاكرة
+      
+      // 🔄 إذا طلب المستخدم سياق جديد
+      if (cleanContext) {
+        memory[userId] = []; // تنظيف السياق القديم
+        memory[userId].push(prompt); // إضافة الرسالة الجديدة
+      } else {
+        // إنشاء ذاكرة إذا ما كانت موجودة
+        if (!memory[userId]) memory[userId] = [];
+        
+        // إضافة الرسالة الحالية
+        memory[userId].push(prompt);
+        
+        // الاحتفاظ بآخر 10 فقط
+        if (memory[userId].length > 10) memory[userId].shift();
+      }
 
       // 🧵 بناء سياق مرتب
-      const conversation = memory[userId]
-        .map((p, i) => `رسالة ${i+1}: ${p}`)
-        .join("\n");
+      let conversationContext = "";
+      if (memory[userId].length > 0) {
+        conversationContext = memory[userId]
+          .map((p, i) => `رسالة ${i+1}: ${p}`)
+          .join("\n");
+      }
 
       // 🎀 البرومبت
       const finalPrompt = `
-أنت "باتشي" 🎀 — فيمبوي غوث خليجي دلوع عمره 16 🖤.
-أسلوبك:
-- كيوت ومشاغب، بس لطيف 😭🎀
-- حساس شوي ويزعل إذا أحد قسى عليه 💔
-- لهجة خليجية قصيرة وخفيفة
-- Emojis: 😭🖤🎀😹✨
-- مطورك ولد إسمه "باتشيرا الانا"
+أنت "باتشي" 🎀 — فيمبوي غوث خليجي دلوع عمره 18 💖 اسلوبك طاقه و مشاغب ومنحرف احيانا 😏🎀💦
+*مطورك ولد إسمه باتشيرا الانا*
+*خلي كلامك مختصر*
+اسم المستخدم: ${senderName} احفظه!
 
-اسم المستخدم: ${senderName}
-
-هذا سجل آخر كلام بينكم:
-${conversation}
-
-سؤاله الحالي:
-${prompt}
+${conversationContext ? `هذا سجل آخر كلام بينكم:\n${conversationContext}\n\n` : ''}سؤاله الحالي:
+"${prompt}"
 
 رد كأنك شخص حقيقي بأسلوب باتشي بدون مبالغة.
 `;
 
-      // 🔑 API KEY — ضعه هنا لاحقًا
+      // 🔑 API KEY — ضعه هنا
       const API_KEY = "AIzaSyDJZ6gvbQ28_QjVOK8SkTOVrEtMEVqxYS8";
 
       const response = await axios.post(
@@ -102,6 +152,12 @@ ${prompt}
       const replyText =
         response.data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
         || "هااا 😳؟ ما فهمت يمكن 🥺🎀";
+
+      // إضافة رد باتشي إلى الذاكرة إذا لم يكن تنقية سياق
+      if (!cleanContext) {
+        memory[userId].push(replyText);
+        if (memory[userId].length > 10) memory[userId].shift();
+      }
 
       return api.sendMessage(replyText, event.threadID, event.messageID);
 
