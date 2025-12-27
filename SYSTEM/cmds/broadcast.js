@@ -1,9 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
 // 📁 قراءة ملف config.json
 const configPath = path.join(__dirname, "..", "..", "config.json");
-let config = { adminBot: [], broadcastPassword: "باتشي123" }; // كلمة سر افتراضية
+let config = { adminBot: [], broadcastPassword: "باتشي123" };
 
 try {
     if (fs.existsSync(configPath)) {
@@ -30,7 +31,6 @@ function logBroadcast(data) {
             timestamp: new Date().toISOString()
         });
         
-        // حفظ آخر 50 إذاعة فقط
         if (logs.length > 50) logs = logs.slice(0, 50);
         
         fs.writeFileSync(broadcastLogPath, JSON.stringify(logs, null, 2));
@@ -43,7 +43,7 @@ module.exports = {
     config: {
         name: "اذاعة",
         aliases: ["broadcast", "نشر", "إذاعة"],
-        version: "1.0",
+        version: "2.0",
         author: "باتشيرا الانا 🎀",
         countDown: 0,
         role: 0,
@@ -67,26 +67,14 @@ module.exports = {
         const isAdmin = Array.isArray(config.adminBot) && config.adminBot.includes(senderId);
         
         if (!isAdmin) {
-            return message.reply({
-                body: "❌ هذا الأمر مخصص فقط للمطور الرئيسي! 🛡️",
-                mentions: [{
-                    tag: `@${event.senderName || "المستخدم"}`,
-                    id: senderId
-                }]
-            });
+            return message.reply("❌ هذا الأمر مخصص فقط للمطور الرئيسي! 🛡️");
         }
 
-        // التحقق من كلمة السر إذا كانت مطلوبة
+        // التحقق من كلمة السر
         const password = config.broadcastPassword || "باتشي123";
         
         if (args.length === 0 || args[0] !== password) {
-            return message.reply({
-                body: `🔐 يرجى استخدام كلمة السر الصحيحة:\n\n📝 الاستخدام:\nاذاعة ${password}\n\n✨ مثال:\nاذاعة باتشي123`,
-                mentions: [{
-                    tag: `@${event.senderName || "المطور"}`,
-                    id: senderId
-                }]
-            });
+            return message.reply(`🔐 يرجى استخدام كلمة السر الصحيحة:\n\n📝 الاستخدام:\nاذاعة ${password}\n\n✨ مثال:\nاذاعة باتشي123`);
         }
 
         // بدء العملية التفاعلية
@@ -99,17 +87,11 @@ module.exports = {
             senderName: event.senderName || "المطور"
         };
 
-        // حفظ حالة المستخدم (في بيئة حقيقية نستخدم قاعدة بيانات)
+        // حفظ حالة المستخدم
         global.broadcastState = global.broadcastState || {};
         global.broadcastState[senderId] = userState;
 
-        return message.reply({
-            body: `🎤 **مرحباً يا مطوري العزيز ${event.senderName}!** 🥰\n\n🚀 **بدء عملية الإذاعة:**\n\n✨ **الخطوة 1/3:**\nأرسل نص الرسالة التي تريد نشرها لجميع القروبات.\n\n📝 **ملاحظة:**\n• سيتم تزيين النص تلقائياً\n• يمكنك استخدام ~ للسطر الجديد\n• مثال: "مرحباً بالجميع~يومكم سعيد"`,
-            mentions: [{
-                tag: `@${event.senderName || "المطور"}`,
-                id: senderId
-            }]
-        });
+        return message.reply(`🎤 **مرحباً يا مطوري العزيز!** 🥰\n\n🚀 **بدء عملية الإذاعة:**\n\n✨ **الخطوة 1/3:**\nأرسل نص الرسالة التي تريد نشرها لجميع القروبات.\n\n📝 **ملاحظة:**\n• سيتم تزيين النص تلقائياً\n• يمكنك استخدام ~ للسطر الجديد\n• مثال: "مرحباً بالجميع~يومكم سعيد"`);
     },
 
     onChat: async function({ api, event, message }) {
@@ -124,25 +106,16 @@ module.exports = {
         
         const userState = global.broadcastState[senderId];
         const msg = event.body?.trim() || "";
-        const attachments = event.attachments || [];
         
         try {
             switch (userState.step) {
                 case 1: // انتظار نص الرسالة
-                    if (msg.length === 0) {
-                        return message.reply("📝 يرجى إرسال نص الرسالة أولاً!");
-                    }
+                    if (msg.length === 0) return;
                     
                     userState.message = msg.replace(/~/g, '\n');
                     userState.step = 2;
                     
-                    await message.reply({
-                        body: `✅ **تم حفظ نص الرسالة!** ✨\n\n📊 **الخطوة 2/3:**\nهل تريد إضافة صورة مع الرسالة؟\n\n📎 **خيارات:**\n1. أرسل الصورة الآن\n2. اكتب "تخطي" للاستمرار بدون صورة\n3. اكتب "إلغاء" لإلغاء العملية`,
-                        mentions: [{
-                            tag: `@${event.senderName || "المطور"}`,
-                            id: senderId
-                        }]
-                    });
+                    await message.reply(`✅ **تم حفظ نص الرسالة!** ✨\n\n📊 **الخطوة 2/3:**\nهل تريد إضافة صورة مع الرسالة؟\n\n📎 **خيارات:**\n1. أرسل الصورة الآن\n2. اكتب "تخطي" للاستمرار بدون صورة\n3. اكتب "إلغاء" لإلغاء العملية`);
                     
                     global.broadcastState[senderId] = userState;
                     break;
@@ -154,29 +127,29 @@ module.exports = {
                     } else if (msg.toLowerCase() === "إلغاء") {
                         delete global.broadcastState[senderId];
                         return message.reply("❌ **تم إلغاء عملية الإذاعة.**");
-                    } else if (attachments.length > 0 && attachments[0].type === "photo") {
-                        userState.attachment = attachments[0];
+                    } else if (event.messageReply && event.messageReply.attachments && event.messageReply.attachments.length > 0) {
+                        // إذا تم الرد على صورة
+                        userState.attachment = event.messageReply.attachments[0];
+                        userState.step = 3;
+                    } else if (event.attachments && event.attachments.length > 0 && event.attachments[0].type === "photo") {
+                        // إذا تم إرسال صورة مباشرة
+                        userState.attachment = event.attachments[0];
                         userState.step = 3;
                     } else {
                         return message.reply("📎 يرجى إرسال صورة أو كتابة 'تخطي' أو 'إلغاء'");
                     }
                     
                     // عرض المعاينة
-                    const preview = createBroadcastMessage(userState.message, event.senderName);
+                    const preview = createBroadcastMessage(userState.message, userState.senderName);
                     
                     if (userState.attachment) {
+                        // استخدم الرابط مباشرة دون تحميل
                         await message.reply({
                             body: `🖼️ **تم إضافة الصورة!** ✅\n\n📋 **معاينة الرسالة:**\n━━━━━━━━━━━━━━━━━━\n${preview}\n━━━━━━━━━━━━━━━━━━\n\n📊 **الخطوة 3/3:**\nهل تريد بدء الإرسال لجميع القروبات؟\n\n✏️ **رد بـ:**\n• "نعم" للبدء\n• "لا" للإلغاء`,
-                            attachment: await downloadAttachment(api, userState.attachment.url)
+                            attachment: userState.attachment.url // استخدام الرابط مباشرة
                         });
                     } else {
-                        await message.reply({
-                            body: `📋 **معاينة الرسالة:**\n━━━━━━━━━━━━━━━━━━\n${preview}\n━━━━━━━━━━━━━━━━━━\n\n📊 **الخطوة 3/3:**\nهل تريد بدء الإرسال لجميع القروبات؟\n\n✏️ **رد بـ:**\n• "نعم" للبدء\n• "لا" للإلغاء`,
-                            mentions: [{
-                                tag: `@${event.senderName || "المطور"}`,
-                                id: senderId
-                            }]
-                        });
+                        await message.reply(`📋 **معاينة الرسالة:**\n━━━━━━━━━━━━━━━━━━\n${preview}\n━━━━━━━━━━━━━━━━━━\n\n📊 **الخطوة 3/3:**\nهل تريد بدء الإرسال لجميع القروبات؟\n\n✏️ **رد بـ:**\n• "نعم" للبدء\n• "لا" للإلغاء`);
                     }
                     
                     global.broadcastState[senderId] = userState;
@@ -234,17 +207,6 @@ ${text}
 `;
 }
 
-// 📥 دالة لتحميل المرفق
-async function downloadAttachment(api, url) {
-    try {
-        const response = await api.sendMessage({ attachment: await global.utils.getStreamFromURL(url) });
-        return response;
-    } catch (err) {
-        console.error("❌ خطأ في تحميل المرفق:", err);
-        return null;
-    }
-}
-
 // 🚀 دالة لبدء الإرسال للقروبات
 async function startBroadcast(api, message, userState, event) {
     try {
@@ -257,13 +219,7 @@ async function startBroadcast(api, message, userState, event) {
         }
         
         // إرسال رسالة البدء
-        const startMsg = await message.reply({
-            body: `🚀 **بدء عملية الإذاعة...**\n\n📊 **المعلومات:**\n• عدد القروبات: ${groups.length}\n• مع صورة: ${userState.attachment ? 'نعم' : 'لا'}\n• التأخير: 1.5 ثانية بين كل رسالة\n\n⏳ جاري البدء...`,
-            mentions: [{
-                tag: `@${userState.senderName}`,
-                id: userState.senderID
-            }]
-        });
+        const startMsg = await message.reply(`🚀 **بدء عملية الإذاعة...**\n\n📊 **المعلومات:**\n• عدد القروبات: ${groups.length}\n• مع صورة: ${userState.attachment ? 'نعم' : 'لا'}\n• التأخير: 1.5 ثانية بين كل رسالة\n\n⏳ جاري البدء...`);
         
         let successCount = 0;
         let failCount = 0;
@@ -271,11 +227,6 @@ async function startBroadcast(api, message, userState, event) {
         
         // إعداد الرسالة
         const broadcastText = createBroadcastMessage(userState.message, userState.senderName);
-        let attachmentStream = null;
-        
-        if (userState.attachment) {
-            attachmentStream = await global.utils.getStreamFromURL(userState.attachment.url);
-        }
         
         // بدء الإرسال مع تأخير
         for (let i = 0; i < groups.length; i++) {
@@ -283,10 +234,10 @@ async function startBroadcast(api, message, userState, event) {
             
             try {
                 // إرسال الرسالة مع أو بدون صورة
-                if (attachmentStream) {
+                if (userState.attachment && userState.attachment.url) {
                     await api.sendMessage({
                         body: broadcastText,
-                        attachment: attachmentStream
+                        attachment: userState.attachment.url // استخدام الرابط مباشرة
                     }, group.threadID);
                 } else {
                     await api.sendMessage({
@@ -298,9 +249,7 @@ async function startBroadcast(api, message, userState, event) {
                 
                 // تحديث التقدم كل 10 قروبات
                 if ((i + 1) % 10 === 0 || i === groups.length - 1) {
-                    await api.sendMessage({
-                        body: `📤 **جاري الإرسال...**\n\n✅ تم: ${i + 1}/${groups.length}\n❌ فشل: ${failCount}\n⏳ متبقية: ${groups.length - (i + 1)}`
-                    }, userState.threadID, startMsg.messageID);
+                    await message.reply(`📤 **جاري الإرسال...**\n\n✅ تم: ${i + 1}/${groups.length}\n❌ فشل: ${failCount}\n⏳ متبقية: ${groups.length - (i + 1)}`);
                 }
                 
                 // تأخير ذكي بين الرسائل
@@ -308,7 +257,7 @@ async function startBroadcast(api, message, userState, event) {
                 await new Promise(resolve => setTimeout(resolve, delay));
                 
             } catch (err) {
-                console.error(`❌ فشل الإرسال لـ ${group.name || group.threadID}:`, err);
+                console.error(`❌ فشل الإرسال لـ ${group.name || group.threadID}:`, err.message);
                 failCount++;
                 failedGroups.push({
                     name: group.name || `القروب ${group.threadID}`,
@@ -329,7 +278,7 @@ async function startBroadcast(api, message, userState, event) {
             totalGroups: groups.length,
             successCount,
             failCount,
-            failedGroups
+            failedGroups: failedGroups.slice(0, 10) // حفظ أول 10 فقط
         });
         
         // إرسال تقرير النتائج
@@ -340,7 +289,7 @@ async function startBroadcast(api, message, userState, event) {
         report += `• 📊 الإجمالي: ${groups.length} قروب\n`;
         report += `• ⏰ الوقت التقريبي: ${Math.round(groups.length * 1.5 / 60)} دقيقة\n\n`;
         
-        if (failCount > 0) {
+        if (failCount > 0 && failedGroups.length > 0) {
             report += `📝 **القروبات التي فشل الإرسال لها:**\n`;
             failedGroups.slice(0, 5).forEach((g, idx) => {
                 report += `${idx + 1}. ${g.name}\n`;
@@ -352,13 +301,7 @@ async function startBroadcast(api, message, userState, event) {
         
         report += `\n✨ **تم التسجيل في الأرشيف بنجاح.**`;
         
-        await api.sendMessage({
-            body: report,
-            mentions: [{
-                tag: `@${userState.senderName}`,
-                id: userState.senderID
-            }]
-        }, userState.threadID, startMsg.messageID);
+        await message.reply(report);
         
     } catch (err) {
         console.error("❌ خطأ جسيم في الإذاعة:", err);
