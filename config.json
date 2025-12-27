@@ -9,6 +9,7 @@
     "ignoreCommand": []
   },
   "adminBot": ["61569824609057"],
+  "broadcastPassword": "باتشي123"
   "whiteListMode": {
     "enable": false,
     "whiteListIds": []
