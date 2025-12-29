@@ -1,6 +1,5 @@
 const fs = require("fs");
 const path = require("path");
-const axios = require("axios");
 
 // 📁 قراءة ملف config.json
 const configPath = path.join(__dirname, "..", "..", "config.json");
@@ -43,7 +42,7 @@ module.exports = {
     config: {
         name: "اذاعة",
         aliases: ["broadcast", "نشر", "إذاعة"],
-        version: "2.0",
+        version: "3.0",
         author: "باتشيرا الانا 🎀",
         countDown: 0,
         role: 0,
@@ -51,7 +50,7 @@ module.exports = {
             ar: "إرسال رسالة لجميع القروبات (للمطور فقط) 📢" 
         },
         longDescription: { 
-            ar: "أمر متطور لإرسال رسائل مزخرفة لجميع القروبات التي يوجد بها البوت مع إمكانية إرفاق صور وتأخير ذكي بين الرسائل" 
+            ar: "أمر متطور لإرسال رسائل مزخرفة لجميع القروبات مع نظام دفعات ذكي وتأخير آمن" 
         },
         category: "النظام",
         guide: { 
@@ -79,7 +78,7 @@ module.exports = {
 
         // بدء العملية التفاعلية
         const userState = {
-            step: 1, // 1: انتظار النص، 2: انتظار الصورة، 3: التأكيد
+            step: 1,
             message: "",
             attachment: null,
             threadID: threadID,
@@ -128,11 +127,9 @@ module.exports = {
                         delete global.broadcastState[senderId];
                         return message.reply("❌ **تم إلغاء عملية الإذاعة.**");
                     } else if (event.messageReply && event.messageReply.attachments && event.messageReply.attachments.length > 0) {
-                        // إذا تم الرد على صورة
                         userState.attachment = event.messageReply.attachments[0];
                         userState.step = 3;
                     } else if (event.attachments && event.attachments.length > 0 && event.attachments[0].type === "photo") {
-                        // إذا تم إرسال صورة مباشرة
                         userState.attachment = event.attachments[0];
                         userState.step = 3;
                     } else {
@@ -143,10 +140,9 @@ module.exports = {
                     const preview = createBroadcastMessage(userState.message, userState.senderName);
                     
                     if (userState.attachment) {
-                        // استخدم الرابط مباشرة دون تحميل
                         await message.reply({
                             body: `🖼️ **تم إضافة الصورة!** ✅\n\n📋 **معاينة الرسالة:**\n━━━━━━━━━━━━━━━━━━\n${preview}\n━━━━━━━━━━━━━━━━━━\n\n📊 **الخطوة 3/3:**\nهل تريد بدء الإرسال لجميع القروبات؟\n\n✏️ **رد بـ:**\n• "نعم" للبدء\n• "لا" للإلغاء`,
-                            attachment: userState.attachment.url // استخدام الرابط مباشرة
+                            attachment: userState.attachment.url
                         });
                     } else {
                         await message.reply(`📋 **معاينة الرسالة:**\n━━━━━━━━━━━━━━━━━━\n${preview}\n━━━━━━━━━━━━━━━━━━\n\n📊 **الخطوة 3/3:**\nهل تريد بدء الإرسال لجميع القروبات؟\n\n✏️ **رد بـ:**\n• "نعم" للبدء\n• "لا" للإلغاء`);
@@ -157,7 +153,6 @@ module.exports = {
                     
                 case 3: // انتظار التأكيد
                     if (msg.toLowerCase() === "نعم") {
-                        // بدء عملية الإرسال
                         await startBroadcast(api, message, userState, event);
                         delete global.broadcastState[senderId];
                     } else if (msg.toLowerCase() === "لا") {
@@ -207,104 +202,209 @@ ${text}
 `;
 }
 
-// 🚀 دالة لبدء الإرسال للقروبات
-async function startBroadcast(api, message, userState, event) {
+// 🔧 دالة مساعدة: جلب قائمة القروبات بأمان
+async function getSafeThreadList(api, limit = 50) {
     try {
-        // الحصول على قائمة القروبات
-        const threadList = await api.getThreadList(100, null, ['INBOX']);
-        const groups = threadList.filter(t => t.isGroup && t.threadID !== userState.threadID);
+        // محاولة جلب القروبات بطرق مختلفة
+        const methods = [
+            () => api.getThreadList(limit, null, ['INBOX']),
+            () => api.getThreadList(limit, null, ['GROUP']),
+            () => api.getThreadList(limit, null, ['SUBSCRIBED'])
+        ];
         
-        if (groups.length === 0) {
-            return message.reply("❌ لا يوجد قروبات أخرى للإرسال!");
+        for (const method of methods) {
+            try {
+                const threads = await method();
+                if (threads && threads.length > 0) {
+                    console.log(`✅ تم جلب ${threads.length} قروب بنجاح`);
+                    return threads;
+                }
+            } catch (err) {
+                console.log(`⚠️ طريقة فشلت:`, err.message);
+                continue;
+            }
         }
         
-        // إرسال رسالة البدء
-        const startMsg = await message.reply(`🚀 **بدء عملية الإذاعة...**\n\n📊 **المعلومات:**\n• عدد القروبات: ${groups.length}\n• مع صورة: ${userState.attachment ? 'نعم' : 'لا'}\n• التأخير: 1.5 ثانية بين كل رسالة\n\n⏳ جاري البدء...`);
+        return [];
+    } catch (err) {
+        console.error("❌ فشل جميع محاولات جلب القروبات:", err);
+        return [];
+    }
+}
+
+// 🔧 دالة مساعدة: تصفية القروبات الصالحة
+function filterValidGroups(groups, excludeThreadID) {
+    return groups.filter(group => {
+        try {
+            // شروط صرامة للقروب الصالح
+            if (!group || typeof group !== 'object') return false;
+            if (!group.threadID || group.threadID === excludeThreadID) return false;
+            if (group.isGroup !== true) return false;
+            if (!group.name || group.name.trim() === '') return false;
+            if (group.isArchived === true) return false;
+            if (group.isSubscribed === false) return false;
+            
+            return true;
+        } catch (err) {
+            return false;
+        }
+    });
+}
+
+// 🚀 دالة الإرسال الرئيسية
+async function startBroadcast(api, message, userState, event) {
+    try {
+        // 🔍 المرحلة 1: جلب القروبات بأمان
+        await message.reply("🔄 **جاري جلب قائمة القروبات...**");
+        
+        const allThreads = await getSafeThreadList(api, 80);
+        if (allThreads.length === 0) {
+            return message.reply("❌ لم يتم العثور على أي قروبات صالحة!");
+        }
+        
+        // تصفية القروبات الصالحة
+        const validGroups = filterValidGroups(allThreads, userState.threadID);
+        
+        if (validGroups.length === 0) {
+            return message.reply(`❌ من بين ${allThreads.length} قروب، لم يجد أي قروب صالح للإرسال!`);
+        }
+        
+        // 📊 المرحلة 2: عرض المعلومات
+        const broadcastText = createBroadcastMessage(userState.message, userState.senderName);
+        const startMsg = await message.reply(
+            `🚀 **بدء عملية الإذاعة...**\n\n` +
+            `📊 **المعلومات:**\n` +
+            `• عدد القروبات الصالحة: ${validGroups.length}\n` +
+            `• مع صورة: ${userState.attachment ? '✅ نعم' : '❌ لا'}\n` +
+            `• النظام: دفعات صغيرة (5 قروبات/دفعة)\n` +
+            `• التأخير: 2 ثانية بين الدفعات\n\n` +
+            `⏳ **جاري البدء...**`
+        );
+        
+        // 📦 المرحلة 3: تقسيم القروبات لدفعات صغيرة
+        const BATCH_SIZE = 5;
+        const batches = [];
+        
+        for (let i = 0; i < validGroups.length; i += BATCH_SIZE) {
+            batches.push(validGroups.slice(i, i + BATCH_SIZE));
+        }
         
         let successCount = 0;
         let failCount = 0;
         const failedGroups = [];
         
-        // إعداد الرسالة
-        const broadcastText = createBroadcastMessage(userState.message, userState.senderName);
-        
-        // بدء الإرسال مع تأخير
-        for (let i = 0; i < groups.length; i++) {
-            const group = groups[i];
+        // 🔄 المرحلة 4: الإرسال بالدفعات
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+            const batchStart = batchIndex * BATCH_SIZE + 1;
+            const batchEnd = Math.min((batchIndex + 1) * BATCH_SIZE, validGroups.length);
             
-            try {
-                // إرسال الرسالة مع أو بدون صورة
-                if (userState.attachment && userState.attachment.url) {
-                    await api.sendMessage({
-                        body: broadcastText,
-                        attachment: userState.attachment.url // استخدام الرابط مباشرة
-                    }, group.threadID);
-                } else {
-                    await api.sendMessage({
-                        body: broadcastText
-                    }, group.threadID);
+            // تحديث حالة التقدم
+            await message.reply(
+                `📤 **جاري الإرسال - الدفعة ${batchIndex + 1}/${batches.length}**\n` +
+                `📊 القروبات: ${batchStart}-${batchEnd} من ${validGroups.length}\n` +
+                `✅ نجح: ${successCount} | ❌ فشل: ${failCount}`
+            );
+            
+            // إرسال الدفعة الحالية
+            for (const group of batch) {
+                try {
+                    if (userState.attachment && userState.attachment.url) {
+                        await api.sendMessage({
+                            body: broadcastText,
+                            attachment: userState.attachment.url
+                        }, group.threadID);
+                    } else {
+                        await api.sendMessage({
+                            body: broadcastText
+                        }, group.threadID);
+                    }
+                    
+                    successCount++;
+                    
+                } catch (err) {
+                    console.error(`❌ فشل الإرسال لـ ${group.name || group.threadID}:`, err.message);
+                    failCount++;
+                    failedGroups.push({
+                        name: group.name || `القروب ${group.threadID}`,
+                        error: err.message || "خطأ غير معروف",
+                        threadID: group.threadID
+                    });
                 }
                 
-                successCount++;
-                
-                // تحديث التقدم كل 10 قروبات
-                if ((i + 1) % 10 === 0 || i === groups.length - 1) {
-                    await message.reply(`📤 **جاري الإرسال...**\n\n✅ تم: ${i + 1}/${groups.length}\n❌ فشل: ${failCount}\n⏳ متبقية: ${groups.length - (i + 1)}`);
-                }
-                
-                // تأخير ذكي بين الرسائل
-                const delay = groups.length > 50 ? 2000 : 1500;
-                await new Promise(resolve => setTimeout(resolve, delay));
-                
-            } catch (err) {
-                console.error(`❌ فشل الإرسال لـ ${group.name || group.threadID}:`, err.message);
-                failCount++;
-                failedGroups.push({
-                    name: group.name || `القروب ${group.threadID}`,
-                    error: err.message || "خطأ غير معروف"
-                });
-                
-                // تأخير أطول عند الفشل
-                await new Promise(resolve => setTimeout(resolve, 3000));
+                // تأخير قصير بين القروبات داخل الدفعة
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+            
+            // تأخير أطول بين الدفعات (إلا إذا كانت الدفعة الأخيرة)
+            if (batchIndex < batches.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, 2000));
             }
         }
         
-        // تسجيل الإذاعة
+        // 📝 المرحلة 5: التسجيل والتقرير
         logBroadcast({
             senderId: userState.senderID,
             senderName: userState.senderName,
             message: userState.message,
             hasAttachment: !!userState.attachment,
-            totalGroups: groups.length,
+            totalGroups: validGroups.length,
             successCount,
             failCount,
-            failedGroups: failedGroups.slice(0, 10) // حفظ أول 10 فقط
+            failedGroups: failedGroups.slice(0, 10)
         });
         
-        // إرسال تقرير النتائج
+        // 📄 المرحلة 6: إرسال التقرير النهائي
         let report = `✅ **اكتملت عملية الإذاعة!** 🎉\n\n`;
         report += `📊 **التقرير النهائي:**\n`;
-        report += `• ✅ نجحت: ${successCount} قروب\n`;
-        report += `• ❌ فشلت: ${failCount} قروب\n`;
-        report += `• 📊 الإجمالي: ${groups.length} قروب\n`;
-        report += `• ⏰ الوقت التقريبي: ${Math.round(groups.length * 1.5 / 60)} دقيقة\n\n`;
+        report += `• 📁 القروبات الصالحة: ${validGroups.length}\n`;
+        report += `• ✅ نجحت: ${successCount}\n`;
+        report += `• ❌ فشلت: ${failCount}\n`;
+        report += `• 🎯 نسبة النجاح: ${Math.round((successCount / validGroups.length) * 100)}%\n`;
+        report += `• ⏰ الوقت التقريبي: ${Math.round(validGroups.length * 0.5 / 60)} دقيقة\n\n`;
         
-        if (failCount > 0 && failedGroups.length > 0) {
-            report += `📝 **القروبات التي فشل الإرسال لها:**\n`;
-            failedGroups.slice(0, 5).forEach((g, idx) => {
-                report += `${idx + 1}. ${g.name}\n`;
-            });
-            if (failedGroups.length > 5) {
-                report += `... و ${failedGroups.length - 5} أخرى\n`;
+        if (failCount > 0) {
+            report += `📝 **ملاحظات:**\n`;
+            if (failCount <= 3) {
+                failedGroups.forEach((g, idx) => {
+                    report += `${idx + 1}. ${g.name} - ${g.error}\n`;
+                });
+            } else {
+                report += `• فشل الإرسال لـ ${failCount} قروب\n`;
+                report += `• أهم أسباب الفشل: ${failedGroups.slice(0, 3).map(g => g.error.split(':')[0]).join(', ')}\n`;
             }
         }
         
-        report += `\n✨ **تم التسجيل في الأرشيف بنجاح.**`;
+        report += `\n✨ **تم تسجيل الإذاعة في الأرشيف بنجاح.**\n`;
+        report += `📁 يمكنك مراجعة السجل في: broadcast_log.json`;
         
         await message.reply(report);
         
+        // 💾 المرحلة 7: حفظ تقرير مفصل (اختياري)
+        if (failCount > 0) {
+            const detailedReport = {
+                timestamp: new Date().toISOString(),
+                total: validGroups.length,
+                success: successCount,
+                failed: failCount,
+                failedDetails: failedGroups
+            };
+            
+            // يمكن حفظه في ملف منفصل إذا أردت
+            console.log("📋 تقرير مفصل:", JSON.stringify(detailedReport, null, 2));
+        }
+        
     } catch (err) {
         console.error("❌ خطأ جسيم في الإذاعة:", err);
-        await message.reply(`❌ **فشلت عملية الإذاعة:**\n${err.message || "خطأ غير معروف"}`);
+        
+        let errorMsg = `❌ **فشلت عملية الإذاعة:**\n\n`;
+        errorMsg += `🔧 **السبب:** ${err.message || "خطأ غير معروف"}\n\n`;
+        errorMsg += `💡 **الحلول المقترحة:**\n`;
+        errorMsg += `1. تأكد من صلاحيات البوت في القروبات\n`;
+        errorMsg += `2. قلل عدد القروبات في الإعدادات\n`;
+        errorMsg += `3. حاول في وقت لاحق\n`;
+        errorMsg += `4. راجع سجلات البوت للتفاصيل`;
+        
+        await message.reply(errorMsg);
     }
 }
