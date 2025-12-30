@@ -2,33 +2,16 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 
-// قراءة config.json
+// قراءة config
 const configPath = path.join(__dirname, "..", "..", "config.json");
 let config = { adminBot: [] };
 
-try {
-    if (fs.existsSync(configPath)) {
-        config = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    }
-} catch (e) {
-    console.error("CONFIG READ ERROR:", e);
+if (fs.existsSync(configPath)) {
+    config = JSON.parse(fs.readFileSync(configPath, "utf8"));
 }
 
-// رسالة الإذاعة الرسمية
 function createBroadcastMessage(text, senderName) {
     const now = new Date();
-
-    const date = now.toLocaleDateString("ar-SA", {
-        weekday: "long",
-        year: "numeric",
-        month: "long",
-        day: "numeric"
-    });
-
-    const time = now.toLocaleTimeString("ar-SA", {
-        hour: "2-digit",
-        minute: "2-digit"
-    });
 
     return `
 ==============================
@@ -38,8 +21,8 @@ function createBroadcastMessage(text, senderName) {
 ${text}
 
 ------------------------------
-📅 التاريخ: ${date}
-⏰ الوقت: ${time}
+📅 التاريخ: ${now.toLocaleDateString("ar-SA")}
+⏰ الوقت: ${now.toLocaleTimeString("ar-SA",{hour:"2-digit",minute:"2-digit"})}
 👤 المرسل: ${senderName}
 ==============================
 `;
@@ -48,167 +31,136 @@ ${text}
 module.exports = {
     config: {
         name: "إذاعة",
-        aliases: ["broadcast","اذاعه"],
-        version: "4.0",
-        author: "عبّودي 🎀",
         role: 0,
-        countDown: 3,
-        shortDescription: { ar: "إذاعة تفاعلية متقدمة" },
-        longDescription: { ar: "إرسال إذاعة رسمية لجميع القروبات مع دعم الصور — للمشرف فقط" },
-        category: "إدارة"
+        author: "عبّودي"
     },
 
-    // أول استدعاء — بدء العملية
     onStart: async function({ message, event }) {
 
-        const senderId = String(event.senderID);
-        const senderName = event.senderName || "الإدارة";
+        const id = String(event.senderID);
+        const name = event.senderName || "الإدارة";
 
-        const isAdmin = Array.isArray(config.adminBot) && config.adminBot.includes(senderId);
-        if (!isAdmin)
-            return message.reply("❌ هذا الأمر مخصص للمشرف فقط.");
+        if (!config.adminBot.includes(id))
+            return message.reply("❌ هذا الأمر للمشرف فقط.");
 
         global.broadcastState = global.broadcastState || {};
-        global.broadcastState[senderId] = {
+        global.broadcastState[id] = {
             step: 1,
             text: "",
-            attachment: null,
-            senderName
+            imgPath: null,
+            senderName: name
         };
 
-        return message.reply(`✍️ اكتب نص الإذاعة يا ${senderName}.`);
+        return message.reply(`✍️ اكتب نص الإذاعة يا ${name}.`);
     },
 
-    // متابعة الحوار التفاعلي
     onChat: async function({ message, event, api }) {
 
-        const senderId = String(event.senderID);
+        const id = String(event.senderID);
         const msg = (event.body || "").trim();
 
-        const isAdmin = Array.isArray(config.adminBot) && config.adminBot.includes(senderId);
-        if (!isAdmin) return;
+        if (!config.adminBot.includes(id)) return;
+        if (!global.broadcastState?.[id]) return;
 
-        if (!global.broadcastState || !global.broadcastState[senderId]) return;
-
-        const state = global.broadcastState[senderId];
+        const s = global.broadcastState[id];
 
         try {
 
-            // الخطوة 1 — استقبال النص
-            if (state.step === 1) {
+            // النص
+            if (s.step === 1) {
 
                 if (!msg.length) return;
-
-                state.text = msg;
-                state.step = 2;
+                s.text = msg;
+                s.step = 2;
 
                 return message.reply(
-                    `✔️ تم حفظ النص.\n\n📎 هل تريد إضافة صورة؟\nأرسل الصورة الآن — أو اكتب "لا".`
+                    `✔️ تم حفظ النص.\n\n📎 هل تريد إضافة صورة؟\nأرسلها الآن — أو اكتب لا`
                 );
             }
 
-            // الخطوة 2 — استقبال الصورة أو تخطي
-            if (state.step === 2) {
+            // الصورة أو لا
+            if (s.step === 2) {
 
-                // بدون صورة
                 if (msg === "لا") {
-                    state.attachment = null;
-                    state.step = 3;
+                    s.imgPath = null;
+                    s.step = 3;
                 }
 
-                // بالصورة
-                else if (event.attachments && event.attachments[0]?.type === "photo") {
+                else if (event.attachments?.[0]?.url) {
 
-                    const imgUrl = event.attachments[0].url;
-                    const imgPath = path.join(__dirname, "broadcast_img.jpg");
+                    const url = event.attachments[0].url;
+                    const save = path.join(__dirname, "broadcast.jpg");
 
-                    const writer = fs.createWriteStream(imgPath);
-
-                    const response = await axios({
-                        url: imgUrl,
+                    const res = await axios({
+                        url,
                         method: "GET",
                         responseType: "stream"
                     });
 
-                    response.data.pipe(writer);
+                    await new Promise(resolve => {
+                        const w = fs.createWriteStream(save);
+                        res.data.pipe(w);
+                        w.on("finish", resolve);
+                    });
 
-                    await new Promise(resolve => writer.on("finish", resolve));
-
-                    state.attachment = fs.createReadStream(imgPath);
-                    state.step = 3;
+                    s.imgPath = save;
+                    s.step = 3;
                 }
 
-                else {
-                    return message.reply("📎 أرسل صورة — أو اكتب (لا).");
-                }
+                else return message.reply("📎 أرسل صورة — أو اكتب لا");
 
-                return message.reply(`📤 هل تريد بدء الإذاعة الآن؟\n\nرد بـ:\n• نعم\n• لا`);
+                return message.reply(`📤 هل تريد بدء الإذاعة الآن؟\n\nرد بـ نعم أو لا`);
             }
 
-            // الخطوة 3 — التأكيد
-            if (state.step === 3) {
+            // التأكيد
+            if (s.step === 3) {
 
                 if (msg === "لا") {
-                    delete global.broadcastState[senderId];
-                    return message.reply("🚫 تم إلغاء الإذاعة.");
+                    delete global.broadcastState[id];
+                    return message.reply("🚫 تم الإلغاء.");
                 }
 
                 if (msg !== "نعم") return;
 
-                const finalMessage = createBroadcastMessage(state.text, state.senderName);
+                const text = createBroadcastMessage(s.text, s.senderName);
 
-                // القروبات
-                const allThreads = global.db?.allThreadData || [];
-                const groups = allThreads.filter(t => t?.isGroup && t?.threadID);
+                // جلب كل القروبات
+                const all = global.db?.allThreadData || [];
+                const groups = all.filter(t => t?.isGroup);
 
-                if (!groups.length)
-                    return message.reply("❌ لا توجد قروبات صالحة.");
+                let ok = 0, fail = 0;
 
-                await message.reply(`🚀 بدء الإذاعة…\nالمجموع: ${groups.length}`);
+                for (const g of groups) {
 
-                let success = 0;
-                let failed = 0;
+                    try {
 
-                const BATCH = 5;
+                        await api.sendMessage(
+                            s.imgPath
+                                ? { body: text, attachment: fs.createReadStream(s.imgPath) }
+                                : { body: text },
+                            g.threadID
+                        );
 
-                for (let i = 0; i < groups.length; i += BATCH) {
-
-                    const batch = groups.slice(i, i + BATCH);
-
-                    for (const g of batch) {
-
-                        try {
-
-                            await api.sendMessage(
-                                state.attachment
-                                    ? { body: finalMessage, attachment: state.attachment }
-                                    : { body: finalMessage },
-                                g.threadID
-                            );
-
-                            success++;
-                        }
-                        catch {
-                            failed++;
-                        }
-
-                        await new Promise(r => setTimeout(r, 500));
+                        ok++;
+                    }
+                    catch {
+                        fail++;
                     }
 
-                    await new Promise(r => setTimeout(r, 1200));
+                    await new Promise(r=>setTimeout(r,700));
                 }
 
-                delete global.broadcastState[senderId];
+                delete global.broadcastState[id];
 
                 return message.reply(
-                    `📊 تم الإرسال:\n\n✅ ناجحة: ${success}\n❌ فاشلة: ${failed}`
+                    `📊 تم الإرسال:\n\n✅ ${ok}\n❌ ${fail}`
                 );
             }
 
         } catch (e) {
             console.error(e);
-            delete global.broadcastState[senderId];
-            return message.reply("❌ حدث خطأ أثناء الإذاعة.");
+            delete global.broadcastState[id];
+            return message.reply("❌ حدث خطأ.");
         }
     }
 };
