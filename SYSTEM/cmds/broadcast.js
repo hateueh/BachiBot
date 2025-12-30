@@ -11,17 +11,17 @@ try {
 } catch (err) {
     console.error("خطأ في قراءة config.json:", err);
 }
-
+//ver2
 module.exports = {
     config: {
         name: "إذاعة",
         aliases: ["broadcast", "اذاعه"],
-        version: "1.1",
+        version: "1.2",
         author: "عبّودي 🎀",
         countDown: 5,
         role: 0,
-        shortDescription: { ar: "إرسال رسالة إذاعية لكل القروبات" },
-        longDescription: { ar: "يسمح للمشرف بإرسال رسالة عامة لجميع القروبات" },
+        shortDescription: { ar: "إرسال رسالة إلى كل القروبات" },
+        longDescription: { ar: "هذا الأمر مخصص للمشرف فقط لإرسال إذاعة عامة" },
         category: "إدارة",
         guide: { ar: "{pn} رسالتك" }
     },
@@ -31,7 +31,7 @@ module.exports = {
             const senderId = String(event.senderID);
             const senderName = event.senderName || "المشرف";
 
-            // 🔐 تحقق المشرف
+            // 🔐 السماح فقط للمشرف
             const isAdmin = Array.isArray(config.adminBot) && config.adminBot.includes(senderId);
             if (!isAdmin) {
                 return message.reply("❌ هذا الأمر مخصص للمشرف فقط 🛡️");
@@ -42,7 +42,7 @@ module.exports = {
             if (!content)
                 return message.reply("⚠️ استخدم:\nإذاعة + الرسالة");
 
-            // ⏰ التاريخ العربي
+            // ⏰ التاريخ
             const now = new Date();
             const dateStr = now.toLocaleString("ar-EG", { hour12: true });
 
@@ -53,19 +53,21 @@ ${content}
 ${dateStr}
 ${senderName}`;
 
-            // 📬 جميع القروبات
-            const threads = await api.getThreadList(100, null, ["INBOX"]);
-            const groups = threads.filter(t => t.isGroup);
+            // 🗂 جميع القروبات من قاعدة البيانات
+            const allThreads = global.db.allThreadData || [];
 
-            let ok = 0;
-            for (const g of groups) {
+            const groupThreads = allThreads.filter(t => t?.isGroup && t?.threadID);
+
+            let sent = 0;
+
+            for (const t of groupThreads) {
                 try {
-                    await api.sendMessage(finalMsg, g.threadID);
-                    ok++;
+                    await api.sendMessage(finalMsg, t.threadID);
+                    sent++;
                 } catch {}
             }
 
-            return message.reply(`✅ تم إرسال الإذاعة إلى ${ok} مجموعة 🎀`);
+            return message.reply(`✅ تمت الإذاعة إلى ${sent} مجموعة 🎀`);
 
         } catch (e) {
             console.error(e);
