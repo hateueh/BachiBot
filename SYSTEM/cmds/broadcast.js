@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
+// قراءة config.json
 const configPath = path.join(__dirname, "..", "..", "config.json");
 let config = { adminBot: [] };
 
@@ -9,21 +10,76 @@ try {
         config = JSON.parse(fs.readFileSync(configPath, "utf8"));
     }
 } catch (err) {
-    console.error("خطأ في قراءة config.json:", err);
+    console.error("❌ خطأ في قراءة config.json:", err);
 }
-//ver2
+
+// ملف سجل الإذاعات
+const broadcastLogPath = path.join(__dirname, "..", "..", "broadcast_log.json");
+
+// تسجيل الإذاعات
+function logBroadcast(data) {
+    try {
+        let logs = [];
+        if (fs.existsSync(broadcastLogPath)) {
+            logs = JSON.parse(fs.readFileSync(broadcastLogPath, "utf8"));
+        }
+
+        logs.unshift({
+            ...data,
+            timestamp: new Date().toISOString()
+        });
+
+        if (logs.length > 50) logs = logs.slice(0, 50);
+
+        fs.writeFileSync(broadcastLogPath, JSON.stringify(logs, null, 2));
+    } catch (err) {
+        console.error("❌ خطأ في تسجيل الإذاعة:", err);
+    }
+}
+
+// تنسيق الرسالة المزخرفة
+function createBroadcastMessage(text, senderName) {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('ar-SA', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
+    const timeStr = now.toLocaleTimeString('ar-SA', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    return `
+╔═══════════════════════════╗
+       📢 [ اذاعة رسمية ]
+╚═══════════════════════════╝
+
+${text}
+
+╔═══════════════════════════╗
+📅 التاريخ: ${dateStr}
+⏰ الوقت: ${timeStr}
+👤 المرسل: ${senderName || "الإدارة"}
+╚═══════════════════════════╝
+
+✨ من: باتشي 💞
+`;
+}
+
 module.exports = {
     config: {
         name: "إذاعة",
         aliases: ["broadcast", "اذاعه"],
-        version: "1.2",
+        version: "2.2",
         author: "عبّودي 🎀",
         countDown: 5,
         role: 0,
-        shortDescription: { ar: "إرسال رسالة إلى كل القروبات" },
-        longDescription: { ar: "هذا الأمر مخصص للمشرف فقط لإرسال إذاعة عامة" },
+        shortDescription: { ar: "إذاعة متقدمة مع تتبع وصور" },
+        longDescription: { ar: "إرسال رسالة مزخرفة مع دعم الصور وتتبع متكامل للمشرف فقط" },
         category: "إدارة",
-        guide: { ar: "{pn} رسالتك" }
+        guide: { ar: "{pn} رسالتك أو قم برد صورة + رسالة" }
     },
 
     onStart: async function({ message, event, args, api }) {
@@ -31,43 +87,74 @@ module.exports = {
             const senderId = String(event.senderID);
             const senderName = event.senderName || "المشرف";
 
-            // 🔐 السماح فقط للمشرف
+            // التحقق إدمن
             const isAdmin = Array.isArray(config.adminBot) && config.adminBot.includes(senderId);
-            if (!isAdmin) {
-                return message.reply("❌ هذا الأمر مخصص للمشرف فقط 🛡️");
-            }
+            if (!isAdmin) return message.reply("❌ هذا الأمر مخصص للمشرف فقط 🛡️");
 
-            // 📝 نص الرسالة
+            // نص الرسالة
             const content = args.join(" ").trim();
-            if (!content)
-                return message.reply("⚠️ استخدم:\nإذاعة + الرسالة");
+            if (!content) return message.reply("⚠️ استخدم:\nإذاعة + نص الرسالة");
 
-            // ⏰ التاريخ
-            const now = new Date();
-            const dateStr = now.toLocaleString("ar-EG", { hour12: true });
+            // تجهيز الرسالة
+            const broadcastText = createBroadcastMessage(content, senderName);
 
-            const finalMsg =
-`----إذاعة----
-${content}
+            // إن كان هناك صورة مرفقة
+            let attachment = null;
 
-${dateStr}
-${senderName}`;
-
-            // 🗂 جميع القروبات من قاعدة البيانات
-            const allThreads = global.db.allThreadData || [];
-
-            const groupThreads = allThreads.filter(t => t?.isGroup && t?.threadID);
-
-            let sent = 0;
-
-            for (const t of groupThreads) {
-                try {
-                    await api.sendMessage(finalMsg, t.threadID);
-                    sent++;
-                } catch {}
+            if (event.attachments && event.attachments.length > 0 && event.attachments[0].type === "photo") {
+                attachment = event.attachments[0].url;
             }
 
-            return message.reply(`✅ تمت الإذاعة إلى ${sent} مجموعة 🎀`);
+            // جلب القروبات من قاعدة البيانات
+            const allThreads = global.db?.allThreadData || [];
+            const validThreads = allThreads.filter(t => t?.isGroup && t?.threadID);
+
+            if (validThreads.length === 0)
+                return message.reply("❌ لم يتم العثور على أي قروبات صالحة 😢");
+
+            await message.reply(`🚀 بدء الإذاعة الرسمية…\n\n📊 عدد القروبات: ${validThreads.length}\n📎 صورة: ${attachment ? "نعم" : "لا"}`);
+
+            // إرسال بدُفعات
+            const BATCH_SIZE = 5;
+            let success = 0;
+            let failed = 0;
+
+            for (let i = 0; i < validThreads.length; i += BATCH_SIZE) {
+                const batch = validThreads.slice(i, i + BATCH_SIZE);
+
+                for (const g of batch) {
+                    try {
+                        await api.sendMessage(
+                            attachment
+                                ? { body: broadcastText, attachment }
+                                : { body: broadcastText },
+                            g.threadID
+                        );
+                        success++;
+                    } catch (e) {
+                        failed++;
+                    }
+
+                    await new Promise(r => setTimeout(r, 500));
+                }
+
+                await new Promise(r => setTimeout(r, 1500));
+            }
+
+            // تسجيل العملية
+            logBroadcast({
+                senderId,
+                senderName,
+                message: content,
+                image: !!attachment,
+                total: validThreads.length,
+                success,
+                failed
+            });
+
+            return message.reply(
+                `🎀 الإذاعة اكتملت:\n\n✅ ناجحة: ${success}\n❌ فاشلة: ${failed}\n📁 تم حفظ السجل`
+            );
 
         } catch (e) {
             console.error(e);
