@@ -16,63 +16,60 @@ module.exports = {
     config: {
         name: "إذاعة",
         aliases: ["broadcast", "اذاعه"],
-        version: "1.0",
-        author: "عبّودي",
+        version: "1.1",
+        author: "عبّودي 🎀",
         countDown: 5,
         role: 0,
-        shortDescription: { ar: "إرسال رسالة إلى كل القروبات" },
-        longDescription: { ar: "هذا الأمر يسمح للمشرف بإرسال رسالة إذاعية لكل القروبات" },
+        shortDescription: { ar: "إرسال رسالة إذاعية لكل القروبات" },
+        longDescription: { ar: "يسمح للمشرف بإرسال رسالة عامة لجميع القروبات" },
         category: "إدارة",
         guide: { ar: "{pn} رسالتك" }
     },
 
-    onCall: async function({ api, event, args }) {
+    onStart: async function({ message, event, args, api }) {
         try {
             const senderId = String(event.senderID);
             const senderName = event.senderName || "المشرف";
 
-            // 🔐 السماح فقط للمشرف
+            // 🔐 تحقق المشرف
             const isAdmin = Array.isArray(config.adminBot) && config.adminBot.includes(senderId);
             if (!isAdmin) {
-                return api.sendMessage("❌ هذا الأمر مخصص للمشرف فقط 🛡️", event.threadID);
+                return message.reply("❌ هذا الأمر مخصص للمشرف فقط 🛡️");
             }
 
-            // 📩 نص الرسالة
-            const message = args.join(" ").trim();
-            if (!message) return api.sendMessage("⚠️ استخدم:\nإذاعة + الرسالة", event.threadID);
+            // 📝 نص الرسالة
+            const content = args.join(" ").trim();
+            if (!content)
+                return message.reply("⚠️ استخدم:\nإذاعة + الرسالة");
 
-            // ⏰ التاريخ
+            // ⏰ التاريخ العربي
             const now = new Date();
-            const formattedDate = now.toLocaleString("ar-EG", { hour12: true });
+            const dateStr = now.toLocaleString("ar-EG", { hour12: true });
 
             const finalMsg =
 `----إذاعة----
-${message}
+${content}
 
-${formattedDate}
+${dateStr}
 ${senderName}`;
 
-            // 📜 جلب كل القروبات
+            // 📬 جميع القروبات
             const threads = await api.getThreadList(100, null, ["INBOX"]);
+            const groups = threads.filter(t => t.isGroup);
 
-            const groupThreads = threads.filter(t => t.isGroup);
-
-            let success = 0;
-            for (const thread of groupThreads) {
+            let ok = 0;
+            for (const g of groups) {
                 try {
-                    await api.sendMessage(finalMsg, thread.threadID);
-                    success++;
-                } catch (e) {}
+                    await api.sendMessage(finalMsg, g.threadID);
+                    ok++;
+                } catch {}
             }
 
-            return api.sendMessage(
-                `✅ تم إرسال الإذاعة إلى ${success} جروب 🎀`,
-                event.threadID
-            );
+            return message.reply(`✅ تم إرسال الإذاعة إلى ${ok} مجموعة 🎀`);
 
-        } catch (err) {
-            console.error(err);
-            return api.sendMessage("❌ حدث خطأ أثناء الإرسال 😢", event.threadID);
+        } catch (e) {
+            console.error(e);
+            return message.reply("❌ حدث خطأ أثناء الإذاعة 😭");
         }
     }
 };
