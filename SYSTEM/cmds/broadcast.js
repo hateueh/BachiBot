@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
+const axios = require("axios");
 
-// قراءة ملف الإعدادات
+// قراءة config.json
 const configPath = path.join(__dirname, "..", "..", "config.json");
 let config = { adminBot: [] };
 
@@ -13,18 +14,18 @@ try {
     console.error("CONFIG READ ERROR:", e);
 }
 
-// تنسيق الرسالة الرسمية
+// رسالة الإذاعة الرسمية
 function createBroadcastMessage(text, senderName) {
     const now = new Date();
 
-    const date = now.toLocaleDateString('ar-SA', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
+    const date = now.toLocaleDateString("ar-SA", {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric"
     });
 
-    const time = now.toLocaleTimeString('ar-SA', {
+    const time = now.toLocaleTimeString("ar-SA", {
         hour: "2-digit",
         minute: "2-digit"
     });
@@ -48,16 +49,18 @@ module.exports = {
     config: {
         name: "إذاعة",
         aliases: ["broadcast","اذاعه"],
-        version: "3.0",
+        version: "4.0",
         author: "عبّودي 🎀",
         role: 0,
         countDown: 3,
         shortDescription: { ar: "إذاعة تفاعلية متقدمة" },
-        longDescription: { ar: "يتيح للمشرف إرسال رسالة إذاعية لجميع القروبات بصيغة رسمية مع دعم الصور" },
+        longDescription: { ar: "إرسال إذاعة رسمية لجميع القروبات مع دعم الصور — للمشرف فقط" },
         category: "إدارة"
     },
 
+    // أول استدعاء — بدء العملية
     onStart: async function({ message, event }) {
+
         const senderId = String(event.senderID);
         const senderName = event.senderName || "الإدارة";
 
@@ -76,6 +79,7 @@ module.exports = {
         return message.reply(`✍️ اكتب نص الإذاعة يا ${senderName}.`);
     },
 
+    // متابعة الحوار التفاعلي
     onChat: async function({ message, event, api }) {
 
         const senderId = String(event.senderID);
@@ -90,7 +94,7 @@ module.exports = {
 
         try {
 
-            // الخطوة 1 — حفظ النص
+            // الخطوة 1 — استقبال النص
             if (state.step === 1) {
 
                 if (!msg.length) return;
@@ -99,20 +103,38 @@ module.exports = {
                 state.step = 2;
 
                 return message.reply(
-                    `✔️ تم حفظ نص الإذاعة.\n\n📎 هل تريد إضافة صورة؟\nأرسل الصورة الآن، أو اكتب "لا".`
+                    `✔️ تم حفظ النص.\n\n📎 هل تريد إضافة صورة؟\nأرسل الصورة الآن — أو اكتب "لا".`
                 );
             }
 
-            // الخطوة 2 — استقبال الصورة أو التخطي
+            // الخطوة 2 — استقبال الصورة أو تخطي
             if (state.step === 2) {
 
+                // بدون صورة
                 if (msg === "لا") {
                     state.attachment = null;
                     state.step = 3;
                 }
 
+                // بالصورة
                 else if (event.attachments && event.attachments[0]?.type === "photo") {
-                    state.attachment = event.attachments[0].url;
+
+                    const imgUrl = event.attachments[0].url;
+                    const imgPath = path.join(__dirname, "broadcast_img.jpg");
+
+                    const writer = fs.createWriteStream(imgPath);
+
+                    const response = await axios({
+                        url: imgUrl,
+                        method: "GET",
+                        responseType: "stream"
+                    });
+
+                    response.data.pipe(writer);
+
+                    await new Promise(resolve => writer.on("finish", resolve));
+
+                    state.attachment = fs.createReadStream(imgPath);
                     state.step = 3;
                 }
 
@@ -120,10 +142,7 @@ module.exports = {
                     return message.reply("📎 أرسل صورة — أو اكتب (لا).");
                 }
 
-                // معاينة
-                return message.reply(
-                    `📤 هل تريد بدء الإذاعة الآن؟\n\nرد بـ:\n• نعم\n• لا`
-                );
+                return message.reply(`📤 هل تريد بدء الإذاعة الآن؟\n\nرد بـ:\n• نعم\n• لا`);
             }
 
             // الخطوة 3 — التأكيد
@@ -136,11 +155,7 @@ module.exports = {
 
                 if (msg !== "نعم") return;
 
-                // تجهيز النص
-                const finalMessage = createBroadcastMessage(
-                    state.text,
-                    state.senderName
-                );
+                const finalMessage = createBroadcastMessage(state.text, state.senderName);
 
                 // القروبات
                 const allThreads = global.db?.allThreadData || [];
@@ -163,12 +178,14 @@ module.exports = {
                     for (const g of batch) {
 
                         try {
+
                             await api.sendMessage(
                                 state.attachment
                                     ? { body: finalMessage, attachment: state.attachment }
                                     : { body: finalMessage },
                                 g.threadID
                             );
+
                             success++;
                         }
                         catch {
