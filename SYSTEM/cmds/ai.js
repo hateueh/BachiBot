@@ -191,7 +191,7 @@ ${conversationContext ? `${conversationContext}\n\n` : '🔹 هذه بداية �
 الآن، رد على ${finalUserName} بطريقة طبيعية وودية:`;
 
             // 🔑 API KEY
-            const API_KEY = "AIzaSyDJZ6gvbQ28_QjVOK8SkTOVrEtMEVqxYS8";
+            const API_KEY = "GIMINE_API_KEY";
 
             const response = await axios.post(
                 `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
